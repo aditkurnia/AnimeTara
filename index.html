@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anime Tara</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Arial', sans-serif;
+        }
+
+        body {
+            background-color: #1a1a1a;
+            color: #ffffff;
+        }
+
+        .navbar {
+            background-color: #2d2d2d;
+            padding: 1rem;
+            position: fixed;
+            width: 100%;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .navbar h1 {
+            color: #ff6b6b;
+            text-align: center;
+        }
+
+        .search-container {
+            max-width: 600px;
+            margin: 1rem auto;
+            padding: 0 1rem;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 0.5rem;
+            border-radius: 5px;
+            border: none;
+            background-color: #3d3d3d;
+            color: white;
+        }
+
+        .content {
+            margin-top: 100px;
+            padding: 1rem;
+        }
+
+        .anime-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 1rem;
+            padding: 1rem;
+        }
+
+        .anime-card {
+            background-color: #2d2d2d;
+            border-radius: 10px;
+            overflow: hidden;
+            transition: transform 0.3s;
+        }
+
+        .anime-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .anime-image {
+            width: 100%;
+            height: 280px;
+            object-fit: cover;
+        }
+
+        .anime-info {
+            padding: 1rem;
+        }
+
+        .anime-title {
+            font-size: 1rem;
+            margin-bottom: 0.5rem;
+            color: #ff6b6b;
+        }
+
+        .anime-score {
+            color: #ffd700;
+            font-weight: bold;
+        }
+
+        .anime-synopsis {
+            font-size: 0.9rem;
+            color: #cccccc;
+            margin-top: 0.5rem;
+            line-height: 1.4;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            font-size: 1.2rem;
+        }
+
+        .error-message {
+            text-align: center;
+            color: #ff6b6b;
+            padding: 1rem;
+        }
+
+        @media (max-width: 600px) {
+            .anime-grid {
+                grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            }
+            
+            .anime-image {
+                height: 200px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <h1>Anime Tara</h1>
+        <div class="search-container">
+            <input type="text" class="search-input" placeholder="Search anime...">
+        </div>
+    </nav>
+
+    <main class="content">
+        <div class="anime-grid" id="animeGrid">
+            <div class="loading">Loading...</div>
+        </div>
+    </main>
+
+    <script>
+        const CLIENT_ID = '8a336099d19d099072c97ebe7b5fcdf5';
+        let currentPage = 1;
+        let isLoading = false;
+        let searchTimeout;
+        let lastSearchQuery = '';
+
+        async function fetchAnime(searchQuery = '') {
+            try {
+                const malApi = 'https://api.myanimelist.net/v2/anime';
+                const params = new URLSearchParams({
+                    q: searchQuery,
+                    limit: '24',
+                    offset: (currentPage - 1) * 24,
+                    fields: 'id,title,main_picture,mean,synopsis,rank,popularity,start_season'
+                });
+
+                const response = await fetch(`${malApi}?${params}`, {
+                    headers: {
+                        'X-MAL-CLIENT-ID': CLIENT_ID
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                return data.data;
+            } catch (error) {
+                console.error('Error fetching anime:', error);
+                throw error;
+            }
+        }
+
+        function showError(message) {
+            const animeGrid = document.getElementById('animeGrid');
+            animeGrid.innerHTML = `<div class="error-message">${message}</div>`;
+        }
+
+        function createAnimeCard(anime) {
+            const title = anime.node.title;
+            const imageUrl = anime.node.main_picture?.medium || '';
+            const score = anime.node.mean || 'N/A';
+            const synopsis = anime.node.synopsis || 'No synopsis available.';
+            
+            return `
+                <div class="anime-card">
+                    <img src="${imageUrl}" alt="${title}" class="anime-image" 
+                         onerror="this.src='https://via.placeholder.com/200x280?text=No+Image'">
+                    <div class="anime-info">
+                        <h3 class="anime-title">${title}</h3>
+                        <p class="anime-score">⭐ ${score}</p>
+                        <p class="anime-synopsis">${synopsis.slice(0, 100)}${synopsis.length > 100 ? '...' : ''}</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function loadAnime(searchQuery = '') {
+            if (isLoading) return;
+            
+            try {
+                isLoading = true;
+                const animeGrid = document.getElementById('animeGrid');
+                
+                if (currentPage === 1) {
+                    animeGrid.innerHTML = '<div class="loading">Loading...</div>';
+                }
+
+                const animeList = await fetchAnime(searchQuery);
+                
+                if (currentPage === 1) {
+                    animeGrid.innerHTML = '';
+                }
+
+                if (animeList.length === 0) {
+                    if (currentPage === 1) {
+                        animeGrid.innerHTML = '<div class="error-message">No anime found.</div>';
+                    }
+                    return;
+                }
+
+                animeList.forEach(anime => {
+                    const animeCard = createAnimeCard(anime);
+                    animeGrid.insertAdjacentHTML('beforeend', animeCard);
+                });
+
+            } catch (error) {
+                if (currentPage === 1) {
+                    showError('Failed to load anime data. Please try again later.');
+                }
+            } finally {
+                isLoading = false;
+            }
+        }
+
+        // Infinite scroll dengan throttling
+        let scrollTimeout;
+        window.addEventListener('scroll', () => {
+            if (scrollTimeout) {
+                clearTimeout(scrollTimeout);
+            }
+
+            scrollTimeout = setTimeout(() => {
+                if (
+                    window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 500 &&
+                    !isLoading
+                ) {
+                    currentPage++;
+                    loadAnime(lastSearchQuery);
+                }
+            }, 100);
+        });
+
+        // Search dengan debouncing
+        document.querySelector('.search-input').addEventListener('input', (e) => {
+            clearTimeout(searchTimeout);
+            const searchQuery = e.target.value.trim();
+            
+            searchTimeout = setTimeout(() => {
+                if (searchQuery !== lastSearchQuery) {
+                    currentPage = 1;
+                    lastSearchQuery = searchQuery;
+                    loadAnime(searchQuery);
+                }
+            }, 500);
+        });
+
+        // Initial load
+        loadAnime();
+    </script>
+</body>
+</html>
